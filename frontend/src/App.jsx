@@ -1,143 +1,144 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { Sparkles, Users, ArrowRight, Compass, ArrowLeft } from 'lucide-react';
+import MemeCard from './components/MemeCard';
+import { shuffledMemes } from './memes';
 
 const BACKEND_URL = 'http://localhost:5001';
 
 function App() {
-  const [step, setStep] = useState('home'); // 'home' | 'create' | 'join' | 'waiting' | 'game'
-  const [pin, setPin] = useState('');
-  const [inputPin, setInputPin] = useState('');
-  const [partnerConnected, setPartnerConnected] = useState(false);
+  // ── Meme state ──────────────────────────────────────────────
+  const [memeQueue,     setMemeQueue]     = useState(() => shuffledMemes());
+  const [currentIndex,  setCurrentIndex]  = useState(0);
+  const [sentCount,     setSentCount]     = useState(0);
+  // Incoming meme from partner — key changes to force MemeCard remount
+  const [incomingMeme,  setIncomingMeme]  = useState(null); // { url, key }
+
+  // ── Socket / room state ─────────────────────────────────────
+  const [pin,         setPin]         = useState(null);
+  const [socketReady, setSocketReady] = useState(false);
   const socketRef = useRef(null);
 
+  // ── Auto-connect on mount ───────────────────────────────────
   useEffect(() => {
-    // Cleanup socket on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
+    autoConnect();
+    return () => socketRef.current?.disconnect();
   }, []);
 
-  const initSocket = (roomPin) => {
-    socketRef.current = io(BACKEND_URL);
-    
-    socketRef.current.on('connect', () => {
-      console.log('Connected to socket server');
-      socketRef.current.emit('join-room', roomPin);
-    });
-
-    socketRef.current.on('partner-joined', (data) => {
-      console.log('Partner joined:', data.message);
-      setPartnerConnected(true);
-      setStep('game');
-    });
-
-    socketRef.current.on('receive-meme', (data) => {
-      console.log('Received meme:', data);
-      // Gameplay logic will be handled here in the next phase
-    });
-
-    socketRef.current.on('disconnect', () => {
-      console.log('Disconnected from socket server');
-    });
-  };
-
-  const handleCreateRoom = async () => {
+  const autoConnect = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/create-room`);
-      const data = await response.json();
+      const res  = await fetch(`${BACKEND_URL}/create-room`);
+      const data = await res.json();
       if (data.roomPin) {
         setPin(data.roomPin);
-        setStep('waiting');
         initSocket(data.roomPin);
       }
-    } catch (error) {
-      console.error('Failed to create room:', error);
-      alert('Cannot connect to backend server. Make sure it is running on ' + BACKEND_URL);
+    } catch {
+      setPin('DEMO'); // backend offline → preview mode, gameplay still works
     }
   };
 
-  const handleJoinRoomSubmit = (e) => {
-    e.preventDefault();
-    if (inputPin.length !== 5) {
-      alert('Please enter a valid 5-digit PIN');
-      return;
-    }
-    setPin(inputPin);
-    initSocket(inputPin);
-    setStep('waiting');
+  const initSocket = (roomPin) => {
+    const socket = io(BACKEND_URL, { reconnectionAttempts: 3 });
+    socketRef.current = socket;
+
+    socket.on('connect',        () => { socket.emit('join-room', roomPin); setSocketReady(true); });
+    socket.on('partner-joined', () => setSocketReady(true));
+    socket.on('disconnect',     () => setSocketReady(false));
+
+    socket.on('receive-meme', (data) => {
+      // Use a timestamp key to force a new MemeCard remount each time
+      setIncomingMeme({ url: data.memeUrl, key: Date.now() });
+    });
   };
+
+  // ── Swipe handler ───────────────────────────────────────────
+  const handleSwipeUp = () => {
+    const meme = memeQueue[currentIndex];
+    if (!meme) return;
+
+    if (socketRef.current?.connected && pin && pin !== 'DEMO') {
+      socketRef.current.emit('slide-meme', {
+        pin,
+        memeUrl:   meme.url,
+        direction: 'up',
+      });
+    }
+
+    setSentCount((c) => c + 1);
+    setCurrentIndex((i) => i + 1);
+  };
+
+  // ── Incoming dismiss (user swipes it away) ──────────────────
+  const handleDismissIncoming = () => setIncomingMeme(null);
+
+  // ── Derived ─────────────────────────────────────────────────
+  const currentMeme  = memeQueue[currentIndex];
+  const isQueueDone  = !currentMeme;
+  const preloadUrls  = memeQueue.slice(currentIndex + 1, currentIndex + 4);
 
   return (
-    <div className="glass-card">
-      {step === 'home' && (
-        <div>
-          <div className="title-gradient">Geser Geser</div>
-          <p className="subtitle">Swipe memes in real-time with your partner!</p>
-          
-          <button className="btn btn-primary" onClick={handleCreateRoom}>
-            <Sparkles size={18} />
-            Create Room
-          </button>
-          
-          <button className="btn btn-secondary" onClick={() => setStep('join')}>
-            <Users size={18} />
-            Join Room
-          </button>
-        </div>
-      )}
+    <div className="game-screen">
 
-      {step === 'join' && (
-        <form onSubmit={handleJoinRoomSubmit}>
-          <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '0.5rem', marginBottom: '1rem' }} onClick={() => setStep('home')}>
-            <ArrowLeft size={16} /> Back
-          </button>
-          <div className="title-gradient" style={{ fontSize: '2rem' }}>Enter Room PIN</div>
-          <p className="subtitle">Ask your partner for their 5-digit code</p>
-          
-          <input 
-            type="text" 
-            className="input-pin" 
-            placeholder="00000" 
-            maxLength={5}
-            value={inputPin}
-            onChange={(e) => setInputPin(e.target.value.replace(/\D/g, ''))}
-          />
-          
-          <button type="submit" className="btn btn-primary">
-            Join Room
-            <ArrowRight size={18} />
-          </button>
-        </form>
-      )}
+      {/* Hidden preload images */}
+      {preloadUrls.map((m) => (
+        <img key={m.id} src={m.url} alt="" style={{ display: 'none' }} aria-hidden />
+      ))}
 
-      {step === 'waiting' && (
-        <div>
-          <div className="title-gradient" style={{ fontSize: '2rem' }}>Room Ready</div>
-          <p className="subtitle">Share this code with your partner to start sliding</p>
-          
-          <div className="pin-display">{pin}</div>
-          
-          <div className="waiting-spinner"></div>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Waiting for partner to join...</p>
-        </div>
-      )}
+      {/* ── Top bar ──────────────────────────────────────── */}
+      <header className="game-topbar">
+        <span className="game-logo">🍃 Geser Geser</span>
+        {pin && (
+          <span className={`room-chip${socketReady ? ' room-chip--live' : ''}`}>
+            {socketReady && <span className="room-chip__dot" />}
+            {pin === 'DEMO' ? 'Preview' : `Room ${pin}`}
+          </span>
+        )}
+      </header>
 
-      {step === 'game' && (
-        <div>
-          <div className="title-gradient" style={{ fontSize: '2rem' }}>Connected!</div>
-          <p className="subtitle">You are now in Room: <strong>{pin}</strong></p>
-          <div style={{ margin: '2rem 0', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <Compass size={24} className="animate-spin" />
-            <span>Ready for swiping gameplay!</span>
+      {/* ── Meme area ────────────────────────────────────── */}
+      <main className="meme-stack-area">
+        {isQueueDone ? (
+          <div className="queue-done">
+            <span style={{ fontSize: '3.5rem' }}>🌾</span>
+            <p className="queue-done__title">All memes sent!</p>
+            <p className="queue-done__sub">You slid through everything 🎉</p>
+            <button
+              className="btn-restart"
+              onClick={() => { setMemeQueue(shuffledMemes()); setCurrentIndex(0); setSentCount(0); }}
+            >
+              Shuffle &amp; Restart
+            </button>
           </div>
-          <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-            Next phase: Implement swipe animations and real-time meme exchanges.
-          </p>
-        </div>
+        ) : (
+          /* Current meme — user swipes this UP to send */
+          <MemeCard
+            key={`own-${currentMeme.id}`}
+            meme={currentMeme}
+            onSwipeUp={handleSwipeUp}
+          />
+        )}
+
+        {/* Incoming meme — drops in from the top, swipe up to dismiss */}
+        {incomingMeme && (
+          <MemeCard
+            key={`incoming-${incomingMeme.key}`}
+            meme={{ url: incomingMeme.url, alt: 'From partner' }}
+            incoming
+            onSwipeUp={handleDismissIncoming}
+          />
+        )}
+      </main>
+
+      {/* ── Footer hint ──────────────────────────────────── */}
+      {!isQueueDone && (
+        <footer className="game-footer">
+          <span className="swipe-hint">↑ swipe up to send</span>
+          {sentCount > 0 && (
+            <span className="sent-count">{sentCount} sent</span>
+          )}
+        </footer>
       )}
+
     </div>
   );
 }
