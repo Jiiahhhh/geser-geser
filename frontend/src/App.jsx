@@ -4,22 +4,22 @@ import { Sparkles, Users, ArrowRight, ArrowLeft } from 'lucide-react';
 import MemeCard from './components/MemeCard';
 import { shuffledMemes } from './memes';
 
-const BACKEND_URL = 'http://localhost:5001';
+const BACKEND_URL = 'http://202.155.95.183:5001';
 
 function App() {
   // ── Navigation ──────────────────────────────────────────────
   const [step, setStep] = useState('home'); // 'home' | 'join' | 'waiting' | 'game'
 
   // ── Room / socket ───────────────────────────────────────────
-  const [pin,         setPin]         = useState('');
-  const [inputPin,    setInputPin]    = useState('');
+  const [pin, setPin] = useState('');
+  const [inputPin, setInputPin] = useState('');
   const [socketReady, setSocketReady] = useState(false);
   const socketRef = useRef(null);
 
   // ── Meme / gameplay ─────────────────────────────────────────
-  const [memeQueue,    setMemeQueue]    = useState(() => shuffledMemes());
+  const [memeQueue, setMemeQueue] = useState(() => shuffledMemes());
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [sentCount,    setSentCount]    = useState(0);
+  const [sentCount, setSentCount] = useState(0);
   const [incomingMeme, setIncomingMeme] = useState(null); // { url, key }
 
   // ── Cleanup on unmount ───────────────────────────────────────
@@ -52,7 +52,7 @@ function App() {
   // ── Create Room ─────────────────────────────────────────────
   const handleCreateRoom = async () => {
     try {
-      const res  = await fetch(`${BACKEND_URL}/create-room`);
+      const res = await fetch(`${BACKEND_URL}/create-room`);
       const data = await res.json();
       if (data.roomPin) {
         setPin(data.roomPin);
