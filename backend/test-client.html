@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +8,7 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-    
+
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
       background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
@@ -126,11 +127,20 @@
       padding-bottom: 4px;
     }
 
-    .log-info { color: #a5b4fc; }
-    .log-success { color: #34d399; }
-    .log-event { color: #f472b6; }
+    .log-info {
+      color: #a5b4fc;
+    }
+
+    .log-success {
+      color: #34d399;
+    }
+
+    .log-event {
+      color: #f472b6;
+    }
   </style>
 </head>
+
 <body>
 
   <div class="card">
@@ -173,7 +183,7 @@
     const gameControls = document.getElementById('gameControls');
     const activeRoomPin = document.getElementById('activeRoomPin');
     const logs = document.getElementById('logs');
-    
+
     const btnSlideLeft = document.getElementById('btnSlideLeft');
     const btnSlideRight = document.getElementById('btnSlideRight');
 
@@ -262,4 +272,5 @@
     btnSlideRight.addEventListener('click', () => sendSlide('right'));
   </script>
 </body>
+
 </html>

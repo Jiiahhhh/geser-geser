@@ -43,8 +43,14 @@ io.on('connection', (socket) => {
     socket.join(pin);
     console.log(`[Join] Socket ${socket.id} joined room ${pin}`);
 
-    // Notify other users in the room
-    socket.to(pin).emit('partner-joined', { message: 'Partner connected!' });
+    const room = io.sockets.adapter.rooms.get(pin);
+    const numClients = room ? room.size : 0;
+
+    // If there are at least 2 clients in the room, notify everyone to start the game
+    if (numClients >= 2) {
+      io.to(pin).emit('partner-joined', { message: 'Partner connected!' });
+      console.log(`[Room Ready] Room ${pin} is now active with ${numClients} users.`);
+    }
   });
 
   // Phase 2: Slide Meme
