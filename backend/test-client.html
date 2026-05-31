@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meme Slider - Socket.io Manual Test Client</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+
+    h1 {
+      font-weight: 800;
+      background: linear-gradient(135deg, #a5b4fc 0%, #ec4899 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      margin-bottom: 25px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #6366f1;
+      color: white;
+    }
+
+    button:hover {
+      background: #4f46e5;
+      transform: translateY(-1px);
+    }
+
+    button.secondary {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f1f5f9;
+    }
+
+    button.secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.2);
+      color: white;
+      font-size: 1.1rem;
+      text-align: center;
+      margin-bottom: 15px;
+      box-sizing: border-box;
+    }
+
+    .log-container {
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 10px;
+      padding: 15px;
+      text-align: left;
+      font-family: monospace;
+      font-size: 0.85rem;
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .log-entry {
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+      padding-bottom: 4px;
+    }
+
+    .log-info { color: #a5b4fc; }
+    .log-success { color: #34d399; }
+    .log-event { color: #f472b6; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Meme Test Client</h1>
+    <div id="connectionStatus" class="status-badge">Disconnected</div>
+
+    <!-- Join/Create Controls -->
+    <div>
+      <div class="btn-group">
+        <button id="btnCreate">Create Room</button>
+        <button id="btnJoin" class="secondary">Join Room</button>
+      </div>
+      <input type="text" id="roomInput" placeholder="Enter 5-digit Room PIN" maxlength="5">
+    </div>
+
+    <!-- Active Game Controls -->
+    <div id="gameControls" style="display: none; margin-top: 25px;">
+      <h3 style="margin-bottom: 15px;">Active Room: <span id="activeRoomPin" style="color: #f472b6;">-</span></h3>
+      <div class="btn-group">
+        <button id="btnSlideLeft" style="background: #ef4444;">Slide Left 👈</button>
+        <button id="btnSlideRight" style="background: #10b981;">Slide Right 👉</button>
+      </div>
+    </div>
+
+    <h4 style="text-align: left; margin: 20px 0 10px 0; color: #94a3b8;">Event Logs</h4>
+    <div id="logs" class="log-container">
+      <div class="log-entry log-info">Client initialized. Click "Create Room" or type a room PIN to test.</div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_URL = 'http://localhost:5001';
+    let socket = null;
+    let currentRoom = null;
+
+    const connectionStatus = document.getElementById('connectionStatus');
+    const btnCreate = document.getElementById('btnCreate');
+    const btnJoin = document.getElementById('btnJoin');
+    const roomInput = document.getElementById('roomInput');
+    const gameControls = document.getElementById('gameControls');
+    const activeRoomPin = document.getElementById('activeRoomPin');
+    const logs = document.getElementById('logs');
+    
+    const btnSlideLeft = document.getElementById('btnSlideLeft');
+    const btnSlideRight = document.getElementById('btnSlideRight');
+
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logs.appendChild(entry);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function initSocket(pin) {
+      if (socket) {
+        socket.disconnect();
+      }
+
+      currentRoom = pin;
+      activeRoomPin.innerText = pin;
+      gameControls.style.display = 'block';
+
+      log(`Connecting to ${BACKEND_URL}...`, 'info');
+      socket = io(BACKEND_URL);
+
+      socket.on('connect', () => {
+        connectionStatus.innerText = 'Connected';
+        connectionStatus.className = 'status-badge connected';
+        log(`Connected! Joining room: ${pin}`, 'success');
+        socket.emit('join-room', pin);
+      });
+
+      socket.on('partner-joined', (data) => {
+        log(`EVENT: partner-joined -> ${data.message}`, 'success');
+      });
+
+      socket.on('receive-meme', (data) => {
+        log(`EVENT: receive-meme -> URL: ${data.memeUrl}, Direction: ${data.direction}`, 'event');
+      });
+
+      socket.on('disconnect', () => {
+        connectionStatus.innerText = 'Disconnected';
+        connectionStatus.className = 'status-badge';
+        log('Disconnected from server.', 'info');
+      });
+    }
+
+    btnCreate.addEventListener('click', async () => {
+      log('Fetching new room pin from REST API...', 'info');
+      try {
+        const response = await fetch(`${BACKEND_URL}/create-room`);
+        const data = await response.json();
+        if (data.roomPin) {
+          log(`REST Response: Generated PIN ${data.roomPin}`, 'success');
+          roomInput.value = data.roomPin;
+          initSocket(data.roomPin);
+        }
+      } catch (err) {
+        log(`API Error: ${err.message}`, 'info');
+        alert('Could not fetch room pin. Make sure backend is running on ' + BACKEND_URL);
+      }
+    });
+
+    btnJoin.addEventListener('click', () => {
+      const pin = roomInput.value.trim();
+      if (pin.length !== 5) {
+        alert('Please enter a 5-digit PIN');
+        return;
+      }
+      initSocket(pin);
+    });
+
+    function sendSlide(direction) {
+      if (!socket || !currentRoom) {
+        alert('Please connect to a room first.');
+        return;
+      }
+      const payload = {
+        pin: currentRoom,
+        memeUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=500',
+        direction: direction
+      };
+      log(`EMIT: slide-meme -> ${JSON.stringify(payload)}`, 'info');
+      socket.emit('slide-meme', payload);
+    }
+
+    btnSlideLeft.addEventListener('click', () => sendSlide('left'));
+    btnSlideRight.addEventListener('click', () => sendSlide('right'));
+  </script>
+</body>
+</html>
