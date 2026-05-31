@@ -15,6 +15,7 @@ function App() {
   const [inputPin, setInputPin] = useState('');
   const [socketReady, setSocketReady] = useState(false);
   const socketRef = useRef(null);
+  const pinRef = useRef('');
 
   // ── Meme / gameplay ─────────────────────────────────────────
   const [memeQueue, setMemeQueue] = useState(() => shuffledMemes());
@@ -29,6 +30,7 @@ function App() {
 
   // ── Socket init ─────────────────────────────────────────────
   const initSocket = (roomPin) => {
+    pinRef.current = roomPin;
     const socket = io(BACKEND_URL, { reconnectionAttempts: 3 });
     socketRef.current = socket;
 
@@ -73,13 +75,13 @@ function App() {
     setStep('waiting');
   };
 
-  // ── Swipe up → send meme ────────────────────────────────────
   const handleSwipeUp = () => {
     const meme = memeQueue[currentIndex];
     if (!meme) return;
 
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('slide-meme', { pin, memeUrl: meme.url, direction: 'up' });
+    const activePin = pinRef.current || pin || inputPin;
+    if (socketRef.current) {
+      socketRef.current.emit('slide-meme', { pin: activePin, memeUrl: meme.url, direction: 'up' });
     }
 
     setSentCount((c) => c + 1);
